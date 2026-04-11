@@ -1,0 +1,9 @@
+# Honeypot & Intruder Profiling System v2.0 — Python dependencies
+#
+# Install all at once:
+#   pip install -r requirements.txt
+
+flask>=2.3
+flask-cors>=4.0
+requests>=2.31
+colorama>=0.4

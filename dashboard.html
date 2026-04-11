@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Honeypot Dashboard v2.0</title>
+
+  <!-- Leaflet.js — interactive world map (no build step required) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Chart.js — bar, doughnut and line charts (no build step required) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+
+  <style>
+    /* -----------------------------------------------------------------------
+       Base reset and variables
+       ----------------------------------------------------------------------- */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:         #0f1117;
+      --surface:    #1a1d27;
+      --border:     #2a2d3e;
+      --text:       #e2e8f0;
+      --text-muted: #8892a4;
+      --green:      #22c55e;
+      --amber:      #f59e0b;
+      --red:        #ef4444;
+      --blue:       #3b82f6;
+      --purple:     #8b5cf6;
+      --cyan:       #06b6d4;
+      --radius:     8px;
+      --font:       'Segoe UI', system-ui, sans-serif;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* -----------------------------------------------------------------------
+       Layout
+       ----------------------------------------------------------------------- */
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+
+    header h1 {
+      font-size: 18px;
+      font-weight: 700;
+      color: var(--cyan);
+      letter-spacing: 0.03em;
+    }
+
+    header h1 span { color: var(--text-muted); font-weight: 400; font-size: 13px; }
+
+    #last-updated { font-size: 12px; color: var(--text-muted); }
+
+    main {
+      max-width: 1600px;
+      margin: 0 auto;
+      padding: 20px 24px;
+      display: grid;
+      gap: 20px;
+    }
+
+    /* -----------------------------------------------------------------------
+       Error banner
+       ----------------------------------------------------------------------- */
+    #error-banner {
+      display: none;
+      background: #7f1d1d;
+      border: 1px solid var(--red);
+      color: #fca5a5;
+      padding: 12px 20px;
+      border-radius: var(--radius);
+      font-size: 13px;
+    }
+
+    /* -----------------------------------------------------------------------
+       Stat cards
+       ----------------------------------------------------------------------- */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      gap: 12px;
+    }
+
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 16px 20px;
+    }
+
+    .stat-card .label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--text-muted); }
+    .stat-card .value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+    .stat-card .value.green  { color: var(--green); }
+    .stat-card .value.amber  { color: var(--amber); }
+    .stat-card .value.red    { color: var(--red); }
+    .stat-card .value.blue   { color: var(--blue); }
+
+    /* -----------------------------------------------------------------------
+       Panels
+       ----------------------------------------------------------------------- */
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+
+    .panel-header {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--border);
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .panel-header .dot {
+      width: 8px; height: 8px;
+      border-radius: 50%;
+      background: var(--cyan);
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.3; }
+    }
+
+    /* -----------------------------------------------------------------------
+       World map
+       ----------------------------------------------------------------------- */
+    #map {
+      height: 380px;
+      width: 100%;
+      background: #111827;
+    }
+
+    /* -----------------------------------------------------------------------
+       Charts row
+       ----------------------------------------------------------------------- */
+    .charts-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 20px;
+    }
+
+    @media (max-width: 900px) {
+      .charts-row { grid-template-columns: 1fr; }
+    }
+
+    .chart-wrap {
+      padding: 16px;
+      height: 260px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    /* -----------------------------------------------------------------------
+       ISP / ASN table
+       ----------------------------------------------------------------------- */
+    .isp-table-wrap {
+      overflow-x: auto;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    thead th {
+      background: #111827;
+      color: var(--text-muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      padding: 8px 12px;
+      text-align: left;
+      position: sticky;
+      top: 0;
+    }
+
+    tbody tr { border-bottom: 1px solid var(--border); }
+    tbody tr:hover { background: rgba(255,255,255,0.03); }
+    tbody td { padding: 8px 12px; }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .badge-vpn   { background: rgba(239,68,68,0.15);  color: var(--red); }
+    .badge-cloud { background: rgba(245,158,11,0.15); color: var(--amber); }
+    .badge-isp   { background: rgba(59,130,246,0.15); color: var(--blue); }
+
+    /* -----------------------------------------------------------------------
+       Live event feed
+       ----------------------------------------------------------------------- */
+    .feed-wrap {
+      overflow-x: auto;
+      max-height: 340px;
+      overflow-y: auto;
+    }
+
+    .feed-row { border-bottom: 1px solid var(--border); }
+    .feed-row:hover { background: rgba(255,255,255,0.03); }
+
+    .risk-low    { border-left: 3px solid var(--green); }
+    .risk-medium { border-left: 3px solid var(--amber); }
+    .risk-high   { border-left: 3px solid var(--red); }
+
+    .score-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 700;
+      min-width: 38px;
+      text-align: center;
+    }
+    .score-low    { background: rgba(34,197,94,0.15);  color: var(--green); }
+    .score-medium { background: rgba(245,158,11,0.15); color: var(--amber); }
+    .score-high   { background: rgba(239,68,68,0.15);  color: var(--red);   }
+
+    .type-pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+    }
+    .type-browser { background: rgba(34,197,94,0.1);  color: var(--green);  }
+    .type-bot     { background: rgba(59,130,246,0.1); color: var(--blue);   }
+    .type-scanner { background: rgba(239,68,68,0.1);  color: var(--red);    }
+    .type-scraper { background: rgba(245,158,11,0.1); color: var(--amber);  }
+    .type-unknown { background: rgba(139,92,246,0.1); color: var(--purple); }
+
+    code { font-family: 'Cascadia Code', 'Consolas', monospace; font-size: 12px; color: var(--cyan); }
+
+    .empty-state { padding: 40px; text-align: center; color: var(--text-muted); font-size: 13px; }
+  </style>
+</head>
+<body>
+
+<!-- =========================================================================
+     Header
+     ========================================================================= -->
+<header>
+  <h1>🍯 Honeypot Dashboard <span>v2.0 + Geolocation</span></h1>
+  <div id="last-updated">Connecting…</div>
+</header>
+
+<main>
+
+  <!-- Error banner -->
+  <div id="error-banner">
+    ⚠ Cannot reach <strong>http://127.0.0.1:5000/logs</strong>.
+    Make sure the server is running. Retrying every 5 seconds…
+  </div>
+
+  <!-- Stat cards -->
+  <div class="stat-grid">
+    <div class="stat-card">
+      <div class="label">Total Requests</div>
+      <div class="value blue" id="stat-total">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Unique IPs</div>
+      <div class="value blue" id="stat-ips">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Low Risk</div>
+      <div class="value green" id="stat-low">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Suspicious</div>
+      <div class="value amber" id="stat-med">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">High Risk</div>
+      <div class="value red" id="stat-high">0</div>
+    </div>
+    <div class="stat-card">
+      <div class="label">Countries</div>
+      <div class="value blue" id="stat-countries">0</div>
+    </div>
+  </div>
+
+  <!-- World map -->
+  <div class="panel">
+    <div class="panel-header"><span class="dot"></span> Origin Map — Attacker Geolocation</div>
+    <div id="map"></div>
+  </div>
+
+  <!-- Charts row -->
+  <div class="charts-row">
+    <div class="panel">
+      <div class="panel-header">Threat Score Distribution</div>
+      <div class="chart-wrap"><canvas id="scoreChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">Client Type Breakdown</div>
+      <div class="chart-wrap"><canvas id="typeChart"></canvas></div>
+    </div>
+    <div class="panel">
+      <div class="panel-header">Top Countries</div>
+      <div class="chart-wrap"><canvas id="countryChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- ISP / ASN table -->
+  <div class="panel">
+    <div class="panel-header">ISP / ASN Intelligence</div>
+    <div class="isp-table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>ISP / Organisation</th>
+            <th>ASN</th>
+            <th>Requests</th>
+            <th>Type</th>
+          </tr>
+        </thead>
+        <tbody id="isp-table-body">
+          <tr><td colspan="4" class="empty-state">No data yet — run client.py to generate traffic.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- Live event feed -->
+  <div class="panel">
+    <div class="panel-header"><span class="dot"></span> Live Event Feed</div>
+    <div class="feed-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Time (UTC)</th>
+            <th>IP</th>
+            <th>Location</th>
+            <th>ISP</th>
+            <th>Endpoint</th>
+            <th>Type</th>
+            <th>Score</th>
+            <th>Fingerprint</th>
+          </tr>
+        </thead>
+        <tbody id="feed-body">
+          <tr><td colspan="8" class="empty-state">Waiting for traffic…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</main>
+
+<!-- =========================================================================
+     Scripts
+     ========================================================================= -->
+<script>
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const LOGS_URL    = 'http://127.0.0.1:5000/logs';
+const POLL_MS     = 3000;  // poll /logs every 3 seconds
+
+// ISP keyword lists mirror server.py for client-side highlighting
+const VPN_KEYWORDS   = ['vpn', 'proxy', 'tor', 'anonymizer', 'anonymous', 'hide', 'tunnel'];
+const CLOUD_KEYWORDS = ['amazon', 'aws', 'digitalocean', 'linode', 'akamai', 'vultr',
+                        'ovh', 'hetzner', 'google cloud', 'azure', 'microsoft',
+                        'cloudflare', 'fastly', 'rackspace', 'choopa', 'quadranet'];
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+
+let knownIds    = new Set();  // track IDs we've already rendered in the feed
+let mapPins     = {};          // ip → Leaflet marker, so we don't double-pin
+
+// ---------------------------------------------------------------------------
+// Map initialisation
+// ---------------------------------------------------------------------------
+
+const map = L.map('map', { zoomControl: true }).setView([20, 0], 2);
+
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',
+  maxZoom: 18,
+}).addTo(map);
+
+// ---------------------------------------------------------------------------
+// Chart initialisation
+// ---------------------------------------------------------------------------
+
+const chartDefaults = {
+  plugins: { legend: { labels: { color: '#8892a4', font: { size: 12 } } } },
+  scales:  { x: { ticks: { color: '#8892a4' }, grid: { color: '#2a2d3e' } },
+             y: { ticks: { color: '#8892a4' }, grid: { color: '#2a2d3e' } } },
+};
+
+// Threat score distribution bar chart
+const scoreChart = new Chart(document.getElementById('scoreChart'), {
+  type: 'bar',
+  data: {
+    labels: ['Low (0–30)', 'Suspicious (31–60)', 'High (61–100)'],
+    datasets: [{
+      label: 'Requests',
+      data: [0, 0, 0],
+      backgroundColor: ['rgba(34,197,94,0.7)', 'rgba(245,158,11,0.7)', 'rgba(239,68,68,0.7)'],
+      borderRadius: 4,
+    }],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: chartDefaults.scales,
+  },
+});
+
+// Client type doughnut chart
+const typeChart = new Chart(document.getElementById('typeChart'), {
+  type: 'doughnut',
+  data: {
+    labels: ['Browser', 'Bot', 'Scanner', 'Scraper', 'Unknown'],
+    datasets: [{
+      data: [0, 0, 0, 0, 0],
+      backgroundColor: [
+        'rgba(34,197,94,0.8)',
+        'rgba(59,130,246,0.8)',
+        'rgba(239,68,68,0.8)',
+        'rgba(245,158,11,0.8)',
+        'rgba(139,92,246,0.8)',
+      ],
+      borderWidth: 1,
+      borderColor: '#1a1d27',
+    }],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { position: 'bottom', labels: { color: '#8892a4', font: { size: 11 }, padding: 8 } } },
+  },
+});
+
+// Top countries bar chart
+const countryChart = new Chart(document.getElementById('countryChart'), {
+  type: 'bar',
+  data: { labels: [], datasets: [{ label: 'Requests', data: [], backgroundColor: 'rgba(6,182,212,0.7)', borderRadius: 4 }] },
+  options: {
+    indexAxis: 'y',
+    responsive: true, maintainAspectRatio: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { ticks: { color: '#8892a4' }, grid: { color: '#2a2d3e' } },
+      y: { ticks: { color: '#8892a4', font: { size: 11 } }, grid: { display: false } },
+    },
+  },
+});
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+function scoreClass(score) {
+  if (score <  31) return 'low';
+  if (score <= 60) return 'medium';
+  return 'high';
+}
+
+function pinColor(score) {
+  if (score <  31) return '#22c55e';
+  if (score <= 60) return '#f59e0b';
+  return '#ef4444';
+}
+
+function ispBadge(isp = '', org = '') {
+  const combined = (isp + ' ' + org).toLowerCase();
+  if (VPN_KEYWORDS.some(k => combined.includes(k)))   return '<span class="badge badge-vpn">VPN/Proxy</span>';
+  if (CLOUD_KEYWORDS.some(k => combined.includes(k))) return '<span class="badge badge-cloud">Cloud/VPS</span>';
+  return '<span class="badge badge-isp">ISP</span>';
+}
+
+function formatTime(iso) {
+  try { return new Date(iso).toISOString().slice(11, 19); } catch { return iso; }
+}
+
+// ---------------------------------------------------------------------------
+// Rendering functions
+// ---------------------------------------------------------------------------
+
+function updateStats(logs) {
+  const total     = logs.length;
+  const uniqueIPs = new Set(logs.map(l => l.ip)).size;
+  const low       = logs.filter(l => l.threat_score <  31).length;
+  const med       = logs.filter(l => l.threat_score >= 31 && l.threat_score <= 60).length;
+  const high      = logs.filter(l => l.threat_score >  60).length;
+  const countries = new Set(logs.map(l => l.geo?.countryCode).filter(Boolean)).size;
+
+  document.getElementById('stat-total').textContent     = total;
+  document.getElementById('stat-ips').textContent       = uniqueIPs;
+  document.getElementById('stat-low').textContent       = low;
+  document.getElementById('stat-med').textContent       = med;
+  document.getElementById('stat-high').textContent      = high;
+  document.getElementById('stat-countries').textContent = countries;
+}
+
+function updateScoreChart(logs) {
+  const low  = logs.filter(l => l.threat_score <  31).length;
+  const med  = logs.filter(l => l.threat_score >= 31 && l.threat_score <= 60).length;
+  const high = logs.filter(l => l.threat_score >  60).length;
+  scoreChart.data.datasets[0].data = [low, med, high];
+  scoreChart.update('none');
+}
+
+function updateTypeChart(logs) {
+  const counts = { browser: 0, bot: 0, scanner: 0, scraper: 0, unknown: 0 };
+  logs.forEach(l => { const t = l.client_type; if (t in counts) counts[t]++; else counts.unknown++; });
+  typeChart.data.datasets[0].data = [counts.browser, counts.bot, counts.scanner, counts.scraper, counts.unknown];
+  typeChart.update('none');
+}
+
+function updateCountryChart(logs) {
+  const freq = {};
+  logs.forEach(l => {
+    const c = l.geo?.country;
+    if (c && c !== 'Local') freq[c] = (freq[c] || 0) + 1;
+  });
+  const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  countryChart.data.labels                    = sorted.map(([c]) => c);
+  countryChart.data.datasets[0].data         = sorted.map(([, n]) => n);
+  countryChart.update('none');
+}
+
+function updateISPTable(logs) {
+  const ispMap = {};
+  logs.forEach(l => {
+    const isp = l.geo?.isp || 'Unknown';
+    const asn = l.geo?.as  || '';
+    const org = l.geo?.org || '';
+    const key = isp;
+    if (!ispMap[key]) ispMap[key] = { isp, asn, org, count: 0 };
+    ispMap[key].count++;
+  });
+
+  const sorted = Object.values(ispMap).sort((a, b) => b.count - a.count);
+  const tbody  = document.getElementById('isp-table-body');
+
+  if (sorted.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="4" class="empty-state">No data yet.</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = sorted.map(({ isp, asn, org, count }) => `
+    <tr>
+      <td>${isp}</td>
+      <td><code>${asn}</code></td>
+      <td>${count}</td>
+      <td>${ispBadge(isp, org)}</td>
+    </tr>
+  `).join('');
+}
+
+function updateMap(logs) {
+  logs.forEach(log => {
+    const { ip, geo, threat_score, fingerprint, client_type } = log;
+    if (!geo || geo.lat == null || geo.lon == null) return;
+    if (mapPins[ip]) return;  // already pinned; don't duplicate
+
+    const color = pinColor(threat_score);
+    const icon  = L.divIcon({
+      className: '',
+      html: `<div style="
+        width:12px; height:12px;
+        background:${color};
+        border:2px solid rgba(255,255,255,0.6);
+        border-radius:50%;
+        box-shadow: 0 0 6px ${color};
+      "></div>`,
+      iconSize:   [12, 12],
+      iconAnchor: [6, 6],
+    });
+
+    const city    = geo.city    || '—';
+    const country = geo.country || '—';
+    const isp     = geo.isp     || '—';
+    const asn     = geo.as      || '—';
+
+    const popup = `
+      <div style="font-family:sans-serif;font-size:13px;min-width:180px;">
+        <div style="font-weight:700;margin-bottom:6px;">${ip}</div>
+        <div>📍 ${city}, ${country}</div>
+        <div>🏢 ${isp}</div>
+        <div>🔢 ${asn}</div>
+        <div>🔑 <code>${fingerprint}</code></div>
+        <div style="margin-top:6px;">
+          Score: <strong style="color:${color}">${threat_score}</strong>
+          &nbsp;|&nbsp; Type: <em>${client_type}</em>
+        </div>
+      </div>
+    `;
+
+    const marker = L.marker([geo.lat, geo.lon], { icon }).addTo(map).bindPopup(popup);
+    mapPins[ip]  = marker;
+  });
+}
+
+function updateFeed(logs) {
+  const newLogs = logs.filter(l => !knownIds.has(l.id));
+  if (newLogs.length === 0) return;
+
+  const tbody = document.getElementById('feed-body');
+
+  // Remove the placeholder row if present
+  const placeholder = tbody.querySelector('.empty-state');
+  if (placeholder) tbody.innerHTML = '';
+
+  // Prepend newest entries (reverse so latest appears at top)
+  newLogs.reverse().forEach(log => {
+    const { id, timestamp, ip, geo, endpoint, client_type, threat_score, fingerprint } = log;
+    const sc   = scoreClass(threat_score);
+    const city = geo ? `${geo.city || '—'}, ${geo.country || '—'}` : '—';
+    const isp  = geo?.isp || '—';
+
+    const tr = document.createElement('tr');
+    tr.className = `feed-row risk-${sc}`;
+    tr.innerHTML = `
+      <td>${formatTime(timestamp)}</td>
+      <td><code>${ip}</code></td>
+      <td>${city}</td>
+      <td>${isp}</td>
+      <td><code>${endpoint}</code></td>
+      <td><span class="type-pill type-${client_type}">${client_type}</span></td>
+      <td><span class="score-pill score-${sc}">${threat_score}</span></td>
+      <td><code>${fingerprint}</code></td>
+    `;
+    tbody.prepend(tr);
+    knownIds.add(id);
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Polling loop
+// ---------------------------------------------------------------------------
+
+async function fetchAndRender() {
+  const banner = document.getElementById('error-banner');
+  try {
+    const response = await fetch(LOGS_URL);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const logs = await response.json();
+
+    banner.style.display = 'none';
+    document.getElementById('last-updated').textContent =
+      'Last updated: ' + new Date().toLocaleTimeString();
+
+    updateStats(logs);
+    updateScoreChart(logs);
+    updateTypeChart(logs);
+    updateCountryChart(logs);
+    updateISPTable(logs);
+    updateMap(logs);
+    updateFeed(logs);
+
+  } catch (err) {
+    banner.style.display = 'block';
+    document.getElementById('last-updated').textContent = 'Offline';
+  }
+}
+
+// Initial fetch then poll
+fetchAndRender();
+setInterval(fetchAndRender, POLL_MS);
+</script>
+
+</body>
+</html>
