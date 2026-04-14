@@ -1,0 +1,22 @@
+services:
+  honeypot-ids:
+    build: .
+    container_name: honeypot-ids
+    env_file:
+      - .env
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+      - "2222:2222"
+      - "2121:2121"
+      - "2323:2323"
+      - "8081:8081"
+      - "33060:33060"
+    volumes:
+      - ./data:/app/data
+    networks:
+      - honeypot-lab
+
+networks:
+  honeypot-lab:
+    driver: bridge

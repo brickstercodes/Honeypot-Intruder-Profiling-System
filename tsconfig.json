@@ -1,0 +1,44 @@
+{
+  "include": [
+    "client/src/App.tsx",
+    "client/src/main.tsx",
+    "client/src/index.css",
+    "client/src/pages/Dashboard.tsx",
+    "client/src/pages/Home.tsx",
+    "client/src/pages/Login.tsx",
+    "client/src/pages/NotFound.tsx",
+    "client/src/components/SessionDetailPanel.tsx",
+    "client/src/components/WorldMap.tsx",
+    "client/src/lib/**/*",
+    "client/src/_core/hooks/useAuth.ts",
+    "shared/**/*",
+    "server/routers.ts",
+    "server/simulator.ts",
+    "server/honeypot/**/*",
+    "server/_core/index.ts",
+    "server/_core/context.ts",
+    "server/_core/trpc.ts",
+    "server/_core/vite.ts"
+  ],
+  "exclude": ["node_modules", "build", "dist", "**/*.test.ts"],
+  "compilerOptions": {
+    "incremental": true,
+    "tsBuildInfoFile": "./node_modules/typescript/tsbuildinfo",
+    "noEmit": true,
+    "target": "ES2022",
+    "module": "ESNext",
+    "strict": true,
+    "lib": ["esnext", "dom", "dom.iterable"],
+    "jsx": "preserve",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "moduleResolution": "bundler",
+    "baseUrl": ".",
+    "types": ["node", "vite/client"],
+    "paths": {
+      "@/*": ["./client/src/*"],
+      "@shared/*": ["./shared/*"]
+    }
+  }
+}
